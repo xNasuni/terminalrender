@@ -1,9 +1,16 @@
 #include "camera.h"
 #include <stdio.h>
 #include <math.h>
+#include <stdlib.h>
 
 float dot(Vec3 *v1, Vec3 *v2) {
     return v1->x * v2->x + v1->y * v2->y + v1->z * v2->z;
+}
+float dist(Vec3 *v1, Vec3 *v2) {
+    float dx = v1->x - v2->x;
+    float dy = v1->y - v2->y;
+    float dz = v1->z - v2->z;
+    return sqrt(dx * dx + dy * dy + dz * dz);
 }
 Vec3 normalize(Vec3 v) {
     float length = sqrt(v.x * v.x + v.y * v.y + v.z * v.z);
@@ -14,7 +21,7 @@ Vec3 subtract(Vec3 *v1, Vec3 *v2) {
     Vec3 result = {v1->x - v2->x, v1->y - v2->y, v1->z - v2->z};
     return result;
 }
-Vec3 inverse(Vec3 *v) { // do i even use this
+Vec3 inverse(Vec3 *v) {
     Vec3 result = {-v->x, -v->y , -v->z};
     return result;
 }
@@ -60,18 +67,9 @@ Vec3 point(Vec3 *origin, Vec3 *to) { // this does NOT fucking work with our stup
 // char gpt
 int ray_intersect_object(const struct Ray *_ray, const struct Object *obj) {
 	if (obj->type == 0) { // cube
-		Vec3 local_origin = {
-			_ray->origin.x - obj->pos.x,
-			_ray->origin.y - obj->pos.y,
-			_ray->origin.z - obj->pos.z
-		};
-		
-		Vec3 inv_rotation = {
-			-obj->rot.x,
-			-obj->rot.y,
-			-obj->rot.z
-		};
-		
+		Vec3 local_origin = subtract(&_ray->origin, &obj->pos);
+		Vec3 inv_rotation = inverse(&obj->rot);
+
 		struct Ray local_ray = {
 			rotate_vector(local_origin, inv_rotation),
 			rotate_vector(_ray->direction, inv_rotation)
@@ -113,21 +111,52 @@ int ray_intersect_object(const struct Ray *_ray, const struct Object *obj) {
 			local_ray.origin.z + tmin * local_ray.direction.z
 		};
 
-		if (fabsf(intersection_point.x - min.x) < 1e-4) {
-			return 1; // left face
-		} else if (fabsf(intersection_point.x - max.x) < 1e-4) {
-			return 2; // right face
-		} else if (fabsf(intersection_point.y - min.y) < 1e-4) {
-			return 3; // bottom face
-		} else if (fabsf(intersection_point.y - max.y) < 1e-4) {
-			return 4; // top face
+		if (fabsf(intersection_point.x - min.x) < 1e-4) { // left face | "missing texture"
+            int int1 = 13; // checkerboard 1
+            int int2 = 0; // checkerboard 2
+
+            float x = intersection_point.z - min.z;
+            float y = intersection_point.y - min.y;
+            int checker = (int)(floorf(x * 3.0f) + floorf(y * 3.0f)) % 2;
+
+            if (checker == 1) {
+                return int1;
+            } else {
+                return int2;
+            }
+		} else if (fabsf(intersection_point.x - max.x) < 1e-4) { // right face | rainbow flag :3
+            float gradient = (intersection_point.z - min.z) / (max.z - min.z); // normalize to 0-1
+            gradient = fmaxf(0.0f, fminf(gradient, 1.0f)); // clamp to [0, 1]
+
+            int ansi_colors[] = {196, 208, 227, 154, 27, 57, 213, 0, 0};
+            int color_count = sizeof(ansi_colors) / sizeof(ansi_colors[0]);
+
+            int index = (int)(gradient * (color_count - 1));
+            return ansi_colors[index];
+		} else if (fabsf(intersection_point.y - min.y) < 1e-4) { // bottom face? | transgender flag :3
+            float gradient = (intersection_point.z - min.z) / (max.z - min.z); // normalize to 0-1
+            gradient = fmaxf(0.0f, fminf(gradient, 1.0f)); // clamp to [0, 1]
+
+            int ansi_colors[] = {75, 219, 255, 219, 75, 0};
+            int color_count = sizeof(ansi_colors) / sizeof(ansi_colors[0]);
+
+            int index = (int)(gradient * (color_count - 1));
+            return ansi_colors[index];
+		} else if (fabsf(intersection_point.y - max.y) < 1e-4) { // top face? | simple gradient
+            int int1 = 232; // ansi start 1
+            int int2 = 251; // ansi end 2
+
+            float gradient = (intersection_point.z - min.z) / (max.z - min.z); // normalize y to 0-1
+            gradient = fmaxf(0.0f, fminf(gradient, 1.0f)); // clamp to [0, 1]
+
+            return (int)((int2 - int1) * gradient) + int1;
 		} else if (fabsf(intersection_point.z - min.z) < 1e-4) {
-			return 5; // back face
+			return 7; // back face
 		} else if (fabsf(intersection_point.z - max.z) < 1e-4) {
-			return 6; // front face
+            return 7; // front face
 		}
 
-		return 0; // unknown face
+        return 0;
 	}
 	if (obj->type == 1) {
 
@@ -233,32 +262,34 @@ void render_camera(const struct Camera *camera, const struct World *world) {
 
             int hit = 0;
             for (int i = 0; i < world->object_count; i++) { // Loop over objects in the world
+                // I wonder how not optimized this is
 				if (hit == 0) {
 					hit = ray_intersect_object(&ray, &world->objects[i]);
 				}
             }
 
             if (hit) {
-				int col = 201; // unk face
-				if (hit == 1) {
-					col = 196;
-				}
-				if (hit == 2) {
-					col = 214;
-				}
-				if (hit == 3) {
-					col = 220;
-				}
-				if (hit == 4) {
-					col = 154;
-				}
-				if (hit == 5) {
-					col = 21;
-				}
-				if (hit == 6) {
-					col = 13;
-				}
-                printf("\x1b[38;5;%dm%d", col, hit); // RENDER FACE COLOR!!! FUCK YOU!!
+                int col = hit;
+				// int col = 201; // unk face
+				// if (hit == 1) {
+				// 	col = 196;
+				// }
+				// if (hit == 2) {
+				// 	col = 214;
+				// }
+				// if (hit == 3) {
+				// 	col = 220;
+				// }
+				// if (hit == 4) {
+				// 	col = 154;
+				// }
+				// if (hit == 5) {
+				// 	col = 21;
+				// }
+				// if (hit == 6) {
+				// 	col = 13;
+				// }
+                printf("\x1b[38;5;%dm%d", col, 1); // RENDER COLOR!!! FUCK YOU!!
             } else {
                 printf("\x1b[38;5;232m%d", 0); // no hit
             }
