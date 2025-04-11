@@ -289,9 +289,9 @@ void render_camera(const struct Camera *camera, const struct World *world) {
 				// if (hit == 6) {
 				// 	col = 13;
 				// }
-                printf("\x1b[38;5;%dm%d", col, 1); // RENDER COLOR!!! FUCK YOU!!
+                printf("\x1b[38;5;%dm%s", col, "█"); // RENDER COLOR!!! FUCK YOU!!
             } else {
-                printf("\x1b[38;5;232m%d", 0); // no hit
+                printf("\x1b[38;5;232m%s", "█"); // no hit
             }
         }
         printf("\n");
